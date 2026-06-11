@@ -12,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -26,6 +27,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
+    @Transactional(readOnly = true) // Tối ưu hiệu năng đọc danh sách
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(this::mapToResponse)
@@ -33,6 +35,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional // Đảm bảo đồng bộ ghi thông tin đăng ký
     public UserResponse registerUser(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new RuntimeException("Username đã tồn tại!");
@@ -56,6 +59,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true) // Tối ưu hiệu năng phân trang và tìm kiếm
     public Map<String, Object> getUsersPaginatedAndSearch(String keyword, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<User> userPage;
@@ -79,13 +83,12 @@ public class UserServiceImpl implements UserService {
         return response;
     }
 
-    // MỚI BỔ SUNG: Cập nhật thông tin User
     @Override
+    @Transactional // Đảm bảo đồng bộ chỉnh sửa thông tin người dùng
     public UserResponse updateUser(Long id, UserUpdateRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với ID: " + id));
 
-        // Kiểm tra trùng email với người khác khi thay đổi email
         if (!user.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("Email này đã được sử dụng bởi tài khoản khác!");
         }
@@ -100,8 +103,8 @@ public class UserServiceImpl implements UserService {
         return mapToResponse(updatedUser);
     }
 
-    // MỚI BỔ SUNG: Xóa User
     @Override
+    @Transactional // Đảm bảo tính toàn vẹn khi thực thi lệnh xóa
     public void deleteUser(Long id) {
         if (!userRepository.existsById(id)) {
             throw new RuntimeException("Không tìm thấy người dùng với ID: " + id);
