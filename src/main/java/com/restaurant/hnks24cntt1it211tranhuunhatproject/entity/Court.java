@@ -28,6 +28,7 @@ public class Court {
     @Column(name = "is_available", nullable = false)
     private Boolean isAvailable = true;
 
-    @Column(name = "cluster_id", nullable = false)
-    private Long clusterId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cluster_id", nullable = false)
+    private BadmintonCluster cluster;
 }

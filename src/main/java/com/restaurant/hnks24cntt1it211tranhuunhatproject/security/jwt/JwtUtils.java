@@ -20,7 +20,7 @@ public class JwtUtils {
     @Value("${app.jwt.expiration-ms}")
     private int jwtExpirationMs;
 
-    // Refresh Token có thời hạn dài hơn (Ví dụ: 7 ngày = 604800000 ms)
+    // Refresh Token có thời hạn dài hạn (7 ngày)
     private final long refreshExpirationMs = 604800000L;
 
     private SecretKey getSigningKey() {
@@ -28,7 +28,7 @@ public class JwtUtils {
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    // Sinh Access Token ngắn hạn
+    // 1. Sinh Access Token ngắn hạn TỪ AUTHENTICATION (Dùng khi Login)
     public String generateJwtToken(Authentication authentication) {
         UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
         return Jwts.builder()
@@ -39,12 +39,22 @@ public class JwtUtils {
                 .compact();
     }
 
-    // Sinh Refresh Token dài hạn từ Username
+    // 2. MỚI SỬA: Sinh Access Token ngắn hạn TỪ USERNAME (Dùng khi Xoay vòng /refresh)
+    public String generateJwtToken(String username) {
+        return Jwts.builder()
+                .setSubject(username)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs)) // Dùng thời gian ngắn hạn chuẩn
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // 3. Sinh Refresh Token dài hạn từ Username (Dùng cho cả Login và Refresh)
     public String generateRefreshToken(String username) {
         return Jwts.builder()
                 .setSubject(username)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date((new Date()).getTime() + refreshExpirationMs))
+                .setExpiration(new Date((new Date()).getTime() + refreshExpirationMs)) // Dùng thời gian dài hạn
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
