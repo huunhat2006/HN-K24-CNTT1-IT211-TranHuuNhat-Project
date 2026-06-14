@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -18,14 +19,14 @@ public class CourtAdminController {
 
     private final CourtImageService courtImageService;
 
-    // API: Tải lên nhiều hình ảnh cùng lúc gán cho sân cầu lông theo ID
-    // POST /api/v1/admin/courts/1/images
     @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadCourtImages(
             @PathVariable Long id,
-            @RequestParam("files") MultipartFile[] files) {
+            @RequestParam("files") MultipartFile[] files,
+            Authentication authentication) { // Thêm Authentication lấy danh tính người gõ
         try {
-            List<CourtImageResponse> responses = courtImageService.uploadMultipleImages(id, files);
+            String managerUsername = authentication.getName();
+            List<CourtImageResponse> responses = courtImageService.uploadMultipleImages(id, files, managerUsername);
             return ResponseEntity.status(HttpStatus.CREATED).body(responses);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());

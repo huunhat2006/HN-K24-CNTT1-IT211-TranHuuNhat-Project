@@ -8,6 +8,8 @@ import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.JwtRespons
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.TokenRefreshResponse;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.TokenBlacklist;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.User;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.BadRequestException; // IMPORT MỚI
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.ResourceNotFoundException; // IMPORT MỚI
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.TokenBlacklistRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.UserRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.security.jwt.JwtUtils;
@@ -17,7 +19,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +36,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtils jwtUtils;
     private final UserRepository userRepository;
     private final TokenBlacklistRepository tokenBlacklistRepository;
-    private final PasswordEncoder passwordEncoder; // Gọi bộ mã hóa BCrypt
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public JwtResponse login(LoginRequest loginRequest) {
@@ -47,8 +48,9 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtUtils.generateJwtToken(authentication);
         String refreshToken = jwtUtils.generateRefreshToken(loginRequest.getUsername());
 
+        // ĐÃ SỬA: Thay đổi sang ResourceNotFoundException (Sẽ tự động kích hoạt mã 404)
         User user = userRepository.findByUsername(loginRequest.getUsername())
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng: " + loginRequest.getUsername()));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + loginRequest.getUsername()));
 
         return JwtResponse.builder()
                 .accessToken(accessToken)
@@ -77,7 +79,8 @@ public class AuthServiceImpl implements AuthService {
                     .build();
         }
 
-        throw new RuntimeException("Refresh Token không hợp lệ hoặc đã hết hạn!");
+        // ĐÃ SỬA: Thay sang BadRequestException (Sẽ tự động kích hoạt mã 400)
+        throw new BadRequestException("Refresh Token không hợp lệ hoặc đã hết hạn!");
     }
 
     @Override
@@ -91,8 +94,10 @@ public class AuthServiceImpl implements AuthService {
 
         if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
             String username = jwtUtils.getUserNameFromJwtToken(jwt);
+
+            // ĐÃ SỬA: Thay sang ResourceNotFoundException (404)
             User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng sở hữu Token này!"));
 
             Date expirationDate = jwtUtils.getExpirationDateFromToken(jwt);
 
@@ -105,39 +110,39 @@ public class AuthServiceImpl implements AuthService {
             tokenBlacklistRepository.save(blacklistEntry);
             SecurityContextHolder.clearContext();
         } else {
-            throw new RuntimeException("Yêu cầu đăng xuất không hợp lệ hoặc thiếu Token!");
+            // ĐÃ SỬA: Thay sang BadRequestException (400)
+            throw new BadRequestException("Yêu cầu đăng xuất không hợp lệ hoặc thiếu Token!");
         }
     }
 
     @Override
     @Transactional
-    // MỚI: Đổi mật khẩu tài khoản đang đăng nhập
     public void changePassword(String username, ChangePasswordRequest request) {
+        // ĐÃ SỬA: Thay sang ResourceNotFoundException (404)
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản người dùng hiện tại!"));
 
-        // 1. Kiểm tra mật khẩu cũ trùng khớp không
+        // ĐÃ SỬA: Thay sang BadRequestException (400)
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            throw new RuntimeException("Mật khẩu cũ không chính xác!");
+            throw new BadRequestException("Mật khẩu cũ nhập vào không chính xác!");
         }
 
-        // 2. Lưu mật khẩu mới đã băm băm
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
     }
 
     @Override
     @Transactional
-    // MỚI: Quên mật khẩu (Xác thực danh tính chéo giữa Username và Email để cấp lại mật khẩu mặc định)
     public void forgotPassword(ForgotPasswordRequest request) {
+        // ĐÃ SỬA: Thay sang ResourceNotFoundException (404)
         User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("Tên đăng nhập không tồn tại trên hệ thống!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Tên đăng nhập không tồn tại trên hệ thống!"));
 
+        // ĐÃ SỬA: Thay sang BadRequestException (400)
         if (!user.getEmail().equalsIgnoreCase(request.getEmail())) {
-            throw new RuntimeException("Email xác thực không khớp với tài khoản này!");
+            throw new BadRequestException("Email xác thực không trùng khớp với tài khoản này!");
         }
 
-        // Đặt lại mật khẩu mặc định khi xác thực chéo thành công: "Ptit@2026"
         user.setPassword(passwordEncoder.encode("Ptit@2026"));
         userRepository.save(user);
     }

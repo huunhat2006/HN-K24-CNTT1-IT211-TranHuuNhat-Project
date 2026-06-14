@@ -4,6 +4,8 @@ import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.request.RegisterReq
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.request.UserUpdateRequest;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.UserResponse;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.User;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.DataConflictException; // IMPORT MỚI
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.ResourceNotFoundException; // IMPORT MỚI
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.UserRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +29,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    @Transactional(readOnly = true) // Tối ưu hiệu năng đọc danh sách
+    @Transactional(readOnly = true)
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(this::mapToResponse)
@@ -35,13 +37,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional // Đảm bảo đồng bộ ghi thông tin đăng ký
+    @Transactional
     public UserResponse registerUser(RegisterRequest request) {
+        // ĐÃ SỬA: Thay sang DataConflictException (409)
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new RuntimeException("Username đã tồn tại!");
+            throw new DataConflictException("Tên đăng nhập (Username) này đã tồn tại trên hệ thống!");
         }
+        // ĐÃ SỬA: Thay sang DataConflictException (409)
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email đã tồn tại!");
+            throw new DataConflictException("Địa chỉ Email này đã được đăng ký bởi tài khoản khác!");
         }
 
         User user = User.builder()
@@ -59,7 +63,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional(readOnly = true) // Tối ưu hiệu năng phân trang và tìm kiếm
+    @Transactional(readOnly = true)
     public Map<String, Object> getUsersPaginatedAndSearch(String keyword, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<User> userPage;
@@ -84,13 +88,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional // Đảm bảo đồng bộ chỉnh sửa thông tin người dùng
+    @Transactional
     public UserResponse updateUser(Long id, UserUpdateRequest request) {
+        // ĐÃ SỬA: Thay sang ResourceNotFoundException (404)
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Cập nhật thất bại: Không tìm thấy người dùng với ID: " + id));
 
+        // ĐÃ SỬA: Thay sang DataConflictException (409)
         if (!user.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email này đã được sử dụng bởi tài khoản khác!");
+            throw new DataConflictException("Xung đột dữ liệu: Email sửa đổi đã được sử dụng bởi tài khoản khác!");
         }
 
         user.setFullName(request.getFullName());
@@ -104,10 +110,11 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional // Đảm bảo tính toàn vẹn khi thực thi lệnh xóa
+    @Transactional
     public void deleteUser(Long id) {
+        // ĐÃ SỬA: Thay sang ResourceNotFoundException (404)
         if (!userRepository.existsById(id)) {
-            throw new RuntimeException("Không tìm thấy người dùng với ID: " + id);
+            throw new ResourceNotFoundException("Xóa thất bại: Không tìm thấy người dùng mang ID: " + id);
         }
         userRepository.deleteById(id);
     }

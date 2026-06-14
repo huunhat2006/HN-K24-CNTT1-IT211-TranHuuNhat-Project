@@ -5,6 +5,9 @@ import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.BookingRes
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.Booking;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.Court;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.User;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.BadRequestException;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.DataConflictException;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.ResourceNotFoundException;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.BookingRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.CourtRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.UserRepository;
@@ -37,16 +40,16 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse createBooking(BookingRequest request, String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin tài khoản đặt sân!"));
 
         Court court = courtRepository.findById(request.getCourtId())
-                .orElseThrow(() -> new RuntimeException("Sân không tồn tại"));
+                .orElseThrow(() -> new ResourceNotFoundException("Sân cầu lông yêu cầu không tồn tại!"));
 
         boolean isConflict = bookingRepository.existsByCourtIdAndBookingDateAndTimeSlotAndStatusIn(
                 request.getCourtId(), request.getBookingDate(), request.getTimeSlot(), Arrays.asList("PENDING", "CONFIRMED"));
 
         if (isConflict) {
-            throw new RuntimeException("Khung giờ này đã có người đặt!");
+            throw new DataConflictException("Xung đột lịch trình: Khung giờ này tại sân đã có người đặt trước!");
         }
 
         Booking booking = Booking.builder()
@@ -64,10 +67,9 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    // MỚI: Xem lịch sử đặt lịch cá nhân (Stream API)
     public Map<String, Object> getCustomerBookingHistory(String username, int page, int size) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lịch sử: User không tồn tại!"));
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<Booking> bookingPage = bookingRepository.findByUserId(user.getId(), pageable);
@@ -80,7 +82,6 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    // MỚI: Xem toàn bộ lịch sử (Dành cho Admin)
     public Map<String, Object> getAllBookingsForAdmin(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<Booking> bookingPage = bookingRepository.findAll(pageable);
@@ -93,16 +94,38 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional
-    // MỚI: Phê duyệt / Từ chối đơn đặt sân
-    public BookingResponse updateBookingStatus(Long bookingId, String status) {
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn đặt sân số: " + bookingId));
+    public Map<String, Object> getBookingsForManager(String managerUsername, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<Booking> bookingPage = bookingRepository.findByClusterManagerUsername(managerUsername, pageable);
 
-        // Chuẩn hóa trạng thái đầu vào: CONFIRMED hoặc CANCELED
+        List<BookingResponse> content = bookingPage.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+
+        return packagePaginatedResponse(bookingPage, content);
+    }
+
+    @Override
+    @Transactional
+    // ĐÃ GIA CỐ BẢO MẬT CHỦ QUYỀN
+    public BookingResponse updateBookingStatus(Long bookingId, String status, String managerUsername) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân số: " + bookingId));
+
+        // KIỂM TRA: Nếu người gọi API không phải là ADMIN, thì bắt buộc phải là MANAGER sở hữu cụm sân đó
+        User currentUser = userRepository.findByUsername(managerUsername)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin tài khoản đang thao tác!"));
+
+        if (!currentUser.getRole().equalsIgnoreCase("ADMIN")) {
+            String ownerUsername = booking.getCourt().getCluster().getManager().getUsername();
+            if (!ownerUsername.equalsIgnoreCase(managerUsername)) {
+                throw new BadRequestException("Vi phạm bảo mật: Bạn không có quyền phê duyệt đơn đặt thuộc sân của người khác!");
+            }
+        }
+
         String upperStatus = status.toUpperCase();
         if (!upperStatus.equals("CONFIRMED") && !upperStatus.equals("CANCELED")) {
-            throw new RuntimeException("Trạng thái phê duyệt không hợp lệ!");
+            throw new BadRequestException("Yêu cầu phê duyệt thất bại: Trạng thái cập nhật không hợp lệ!");
         }
 
         booking.setStatus(upperStatus);

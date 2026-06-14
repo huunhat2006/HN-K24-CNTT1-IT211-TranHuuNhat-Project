@@ -5,9 +5,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 public interface CourtImageService {
-    // Lưu danh sách nhiều file ảnh tải lên gán cho 1 sân cầu
-    List<CourtImageResponse> uploadMultipleImages(Long courtId, MultipartFile[] files);
-    
-    // Lấy danh sách ảnh của sân cầu
+    // ĐÃ SỬA: Thêm biến managerUsername để check quyền gán ảnh
+    List<CourtImageResponse> uploadMultipleImages(Long courtId, MultipartFile[] files, String managerUsername);
+
     List<CourtImageResponse> getImagesByCourt(Long courtId);
 }

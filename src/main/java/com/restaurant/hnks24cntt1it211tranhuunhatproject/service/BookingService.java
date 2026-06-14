@@ -7,12 +7,12 @@ import java.util.Map;
 public interface BookingService {
     BookingResponse createBooking(BookingRequest request, String username);
 
-    // MỚI: Xem lịch sử đặt lịch của cá nhân khách hàng
     Map<String, Object> getCustomerBookingHistory(String username, int page, int size);
 
-    // MỚI: Xem toàn bộ lịch sử hệ thống (Dành cho Admin)
     Map<String, Object> getAllBookingsForAdmin(int page, int size);
 
-    // MỚI: Phê duyệt hoặc Từ chối lịch đặt sân
-    BookingResponse updateBookingStatus(Long bookingId, String status);
+    Map<String, Object> getBookingsForManager(String managerUsername, int page, int size);
+
+    // ĐÃ SỬA: Thêm managerUsername để kiểm toán chủ quyền đơn đặt
+    BookingResponse updateBookingStatus(Long bookingId, String status, String managerUsername);
 }

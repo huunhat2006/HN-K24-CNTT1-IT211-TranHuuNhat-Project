@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.0.6'
+    id 'org.springframework.boot' version '3.3.4' // ĐÃ SỬA: Đưa về bản 3.x chuẩn ổn định
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -19,25 +19,37 @@ repositories {
 }
 
 dependencies {
-    // Thư viện Cloudinary SDK dành cho Java
+    // 1. LƯU TRỮ ĐÁM MÂY (Cloudinary)
     implementation 'com.cloudinary:cloudinary-http44:1.36.0'
+
+    // 2. CÁC CORE STARTER CỦA SPRING BOOT (ĐÃ FIX TÊN CHUẨN)
+    implementation 'org.springframework.boot:spring-boot-starter-web' // ĐÃ SỬA: Starter Web chuẩn chứa Spring MVC
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+
+    // 3. THYMELEAF & SECURITY INTERACTION
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
+
+    // 4. TRỌN BỘ 3 THƯ VIỆN JJWT CHUẨN (Xử lý Token)
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
-    implementation 'io.jsonwebtoken:jjwt-impl:0.11.5'
-    implementation 'io.jsonwebtoken:jjwt-jackson:0.11.5'
-    compileOnly 'org.projectlombok:lombok'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    annotationProcessor 'org.projectlombok:lombok'
-    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-thymeleaf-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    // 5. DATABASE DRIVER
     runtimeOnly 'com.mysql:mysql-connector-j'
+
+    // 6. LOMBOK (Giảm tải code Boilerplate)
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+    // 7. TẦNG KIỂM THỬ ĐỘC LẬP (UNIT TEST - ĐÃ DỌN SẠCH THƯ VIỆN MA)
+    testImplementation 'org.springframework.boot:spring-boot-starter-test' // ĐÃ SỬA: Gom tất cả các tính năng test vào đây
+    testImplementation 'org.springframework.security:spring-security-test' // ĐÃ SỬA: Tên chuẩn thư viện Security Test
+
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'

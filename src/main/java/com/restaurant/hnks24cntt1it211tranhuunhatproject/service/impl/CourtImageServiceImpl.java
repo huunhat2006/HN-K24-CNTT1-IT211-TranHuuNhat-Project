@@ -5,6 +5,8 @@ import com.cloudinary.utils.ObjectUtils;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.CourtImageResponse;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.Court;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.CourtImage;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.BadRequestException;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.ResourceNotFoundException;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.CourtImageRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.CourtRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.service.CourtImageService;
@@ -26,45 +28,47 @@ public class CourtImageServiceImpl implements CourtImageService {
 
     private final CourtImageRepository courtImageRepository;
     private final CourtRepository courtRepository;
-    private final Cloudinary cloudinary; // Tiêm Bean Cloudinary đã cấu hình vào đây
+    private final Cloudinary cloudinary;
 
     @Override
     @Transactional
-    public List<CourtImageResponse> uploadMultipleImages(Long courtId, MultipartFile[] files) {
+    // ĐÃ GIA CỐ KIỂM TRA SỞ HỮU SÂN CẦU LÔNG
+    public List<CourtImageResponse> uploadMultipleImages(Long courtId, MultipartFile[] files, String managerUsername) {
         Court court = courtRepository.findById(courtId)
-                .orElseThrow(() -> new RuntimeException("Sân cầu lông không tồn tại để gán ảnh!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Tải ảnh thất bại: Sân cầu lông mục tiêu không tồn tại!"));
 
-        if (files == null || files.length == 0) {
-            throw new RuntimeException("Danh sách tệp hình ảnh trống!");
+        // KIỂM TRA: Sân này có phải do Manager đang gọi API làm chủ cụm không?
+        String ownerUsername = court.getCluster().getManager().getUsername();
+        if (!ownerUsername.equalsIgnoreCase(managerUsername)) {
+            throw new BadRequestException("Vi phạm bảo mật: Bạn không được quyền upload hình ảnh lên sân của chủ khác!");
         }
 
-        // BẮT BUỘC: Sử dụng Stream API duyệt mảng file, đẩy trực tiếp lên Cloudinary
+        if (files == null || files.length == 0) {
+            throw new BadRequestException("Yêu cầu không thể thực hiện do danh sách tệp hình ảnh trống!");
+        }
+
         List<CourtImage> imagesToSave = Arrays.stream(files)
                 .map(file -> {
                     try {
-                        // Thực hiện đẩy file ảnh dạng bytes lên thư mục tự động đặt tên "badminton_courts" trên mây
                         Map<?, ?> uploadResult = cloudinary.uploader().upload(
                                 file.getBytes(),
                                 ObjectUtils.asMap("folder", "badminton_courts")
                         );
 
-                        // Trích xuất đường dẫn URL bảo mật dạng HTTPS trả về từ Cloudinary
                         String secureUrl = uploadResult.get("secure_url").toString();
 
                         return CourtImage.builder()
-                                .imageUrl(secureUrl) // Lưu URL mây thực tế xuống MySQL
+                                .imageUrl(secureUrl)
                                 .court(court)
                                 .build();
                     } catch (IOException e) {
-                        throw new RuntimeException("Lỗi hệ thống khi tải ảnh lên Cloudinary: " + e.getMessage());
+                        throw new RuntimeException("Lỗi kết nối hệ thống khi đẩy tệp lên đám mây Cloudinary: " + e.getMessage());
                     }
                 })
                 .collect(Collectors.toList());
 
-        // Lưu toàn bộ danh sách thực thể xuống Database
         List<CourtImage> savedImages = courtImageRepository.saveAll(imagesToSave);
 
-        // Map cấu trúc dữ liệu sạch trả về phía Client
         return savedImages.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
