@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -17,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity // Bật tính năng bảo vệ tầng method bằng @PreAuthorize nếu cần
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -24,7 +26,8 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(10); // Sức mạnh mã hóa 10+ theo SRS
+        // Cấu hình mã hóa mật khẩu bằng thuật toán BCrypt với độ mạnh Strength = 12 (Đảm bảo tiêu chuẩn 10+)
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean
@@ -37,15 +40,27 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/api/v1/auth/**").permitAll() // Public API
+                        // QUY TẮC: ƯU TIÊN KIỂM TRA THẰNG CÓ ĐƯỜNG DẪN CHI TIẾT TRƯỚC
+
+                        // 1. Ép buộc API đổi mật khẩu và đăng xuất bắt buộc phải có Token hợp lệ (.authenticated)
+                        auth.requestMatchers("/api/v1/auth/change-password").authenticated()
+                                .requestMatchers("/api/v1/auth/logout").authenticated()
+
+                                // 2. Mở cổng tự do cho các hành động đăng nhập, đăng ký, quên mật khẩu và làm mới token
+                                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/forgot-password", "/api/v1/auth/refresh").permitAll()
                                 .requestMatchers("/error").permitAll()
+
+                                // 3. Phân chia ranh giới Role nghiêm ngặt theo Ma trận phân quyền hệ thống
                                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                                 .requestMatchers("/api/v1/manager/**").hasAnyRole("ADMIN", "MANAGER")
-                                .requestMatchers("/api/v1/customer/**").hasAnyRole("CUSTOMER", "MANAGER", "ADMIN")
+
+                                // ĐÃ SỬA: Khóa chặt luồng Customer, chỉ cho tài khoản có Role CUSTOMER chui vào đặt sân
+                                .requestMatchers("/api/v1/customer/**").hasRole("CUSTOMER")
+
                                 .anyRequest().authenticated()
                 );
 
-        // Bỏ dòng http.authenticationProvider(...) đi, chỉ cần thêm Filter của JWT là đủ
+        // Thêm lớp lọc bảo mật JWT Request Filter đứng trước UsernamePasswordAuthenticationFilter mặc định
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

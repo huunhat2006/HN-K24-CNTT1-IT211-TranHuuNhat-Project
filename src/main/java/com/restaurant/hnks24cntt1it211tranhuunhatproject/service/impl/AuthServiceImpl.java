@@ -6,14 +6,13 @@ import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.request.ChangePassw
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.request.ForgotPasswordRequest;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.JwtResponse;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.TokenRefreshResponse;
-import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.TokenBlacklist;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.User;
-import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.BadRequestException; // IMPORT MỚI
-import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.ResourceNotFoundException; // IMPORT MỚI
-import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.TokenBlacklistRepository;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.BadRequestException;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.exception.ResourceNotFoundException;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.UserRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.security.jwt.JwtUtils;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.service.AuthService;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.service.TokenBlacklistService; // Đổi sang gọi Service
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -24,7 +23,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.ZoneId;
 import java.util.Date;
 
 @Service
@@ -35,7 +33,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtUtils jwtUtils;
     private final UserRepository userRepository;
-    private final TokenBlacklistRepository tokenBlacklistRepository;
+    private final TokenBlacklistService tokenBlacklistService; // TIÊM SERVICE REDIS MỚI
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -48,7 +46,6 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtUtils.generateJwtToken(authentication);
         String refreshToken = jwtUtils.generateRefreshToken(loginRequest.getUsername());
 
-        // ĐÃ SỬA: Thay đổi sang ResourceNotFoundException (Sẽ tự động kích hoạt mã 404)
         User user = userRepository.findByUsername(loginRequest.getUsername())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + loginRequest.getUsername()));
 
@@ -79,7 +76,6 @@ public class AuthServiceImpl implements AuthService {
                     .build();
         }
 
-        // ĐÃ SỬA: Thay sang BadRequestException (Sẽ tự động kích hoạt mã 400)
         throw new BadRequestException("Refresh Token không hợp lệ hoặc đã hết hạn!");
     }
 
@@ -93,24 +89,16 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
-            String username = jwtUtils.getUserNameFromJwtToken(jwt);
-
-            // ĐÃ SỬA: Thay sang ResourceNotFoundException (404)
-            User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng sở hữu Token này!"));
-
+            // 1. Lấy ngày hết hạn của Token, tính toán thời gian sống (TTL) còn lại bằng mili-giây
             Date expirationDate = jwtUtils.getExpirationDateFromToken(jwt);
+            long remainingTimeMs = expirationDate.getTime() - System.currentTimeMillis();
 
-            TokenBlacklist blacklistEntry = TokenBlacklist.builder()
-                    .token(jwt)
-                    .expiryTime(expirationDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime())
-                    .user(user)
-                    .build();
+            // 2. Đẩy thẳng chuỗi token sang lưu trữ bảo mật trên RAM Redis
+            tokenBlacklistService.blacklistToken(jwt, remainingTimeMs);
 
-            tokenBlacklistRepository.save(blacklistEntry);
+            // 3. Xóa ngữ cảnh phiên làm việc hiện tại
             SecurityContextHolder.clearContext();
         } else {
-            // ĐÃ SỬA: Thay sang BadRequestException (400)
             throw new BadRequestException("Yêu cầu đăng xuất không hợp lệ hoặc thiếu Token!");
         }
     }
@@ -118,11 +106,9 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void changePassword(String username, ChangePasswordRequest request) {
-        // ĐÃ SỬA: Thay sang ResourceNotFoundException (404)
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản người dùng hiện tại!"));
 
-        // ĐÃ SỬA: Thay sang BadRequestException (400)
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
             throw new BadRequestException("Mật khẩu cũ nhập vào không chính xác!");
         }
@@ -134,11 +120,9 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
-        // ĐÃ SỬA: Thay sang ResourceNotFoundException (404)
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new ResourceNotFoundException("Tên đăng nhập không tồn tại trên hệ thống!"));
 
-        // ĐÃ SỬA: Thay sang BadRequestException (400)
         if (!user.getEmail().equalsIgnoreCase(request.getEmail())) {
             throw new BadRequestException("Email xác thực không trùng khớp với tài khoản này!");
         }

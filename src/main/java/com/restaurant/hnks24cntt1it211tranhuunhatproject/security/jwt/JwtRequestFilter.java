@@ -1,7 +1,7 @@
 package com.restaurant.hnks24cntt1it211tranhuunhatproject.security.jwt;
 
-import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.TokenBlacklistRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.security.CustomUserDetailsService;
+import com.restaurant.hnks24cntt1it211tranhuunhatproject.service.TokenBlacklistService; // ĐÃ THAY ĐỔI: Import Service mới
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,7 +24,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
     private final CustomUserDetailsService userDetailsService;
-    private final TokenBlacklistRepository tokenBlacklistRepository;
+    private final TokenBlacklistService tokenBlacklistService; // ĐÃ THAY ĐỔI: Sử dụng Service thao tác RAM Redis thay cho MySQL cũ
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -33,12 +33,13 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             String jwt = parseJwt(request);
 
             if (jwt != null) {
-                // RÀNG BUỘC UC-03: Kiểm tra token có nằm trong danh sách đen (Blacklist) hay không
-                if (tokenBlacklistRepository.existsByToken(jwt)) {
-                    response.setStatus(HttpStatus.FORBIDDEN.value());
+                // ĐÃ SỬA: Truy vấn tốc độ cao trên RAM Redis để chặn đứng lỗi tắc nghẽn cổ chai hệ thống
+                if (tokenBlacklistService.isTokenBlacklisted(jwt)) {
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value()); // Sử dụng 401 Unauthorized chuẩn RESTful cho Token bị thu hồi
                     response.setContentType("application/json");
-                    response.getWriter().write("{\"error\": \"Forbidden\", \"message\": \"Token đã bị thu hồi do đăng xuất!\"}");
-                    return; // Chặn đứng Request, không cho đi tiếp vào hệ thống
+                    response.setCharacterEncoding("UTF-8"); // Đảm bảo không bị lỗi font Tiếng Việt khi trả response thô
+                    response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"Mã Token này đã bị vô hiệu hóa do đăng xuất!\"}");
+                    return; // Chặn đứng Request ngay tại cửa ngõ Filter, không cho đi tiếp vào hệ thống
                 }
 
                 if (jwtUtils.validateJwtToken(jwt)) {

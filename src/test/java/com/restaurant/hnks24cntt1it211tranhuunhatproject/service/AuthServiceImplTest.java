@@ -5,7 +5,6 @@ import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.request.TokenRefres
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.JwtResponse;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.dto.response.TokenRefreshResponse;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.entity.User;
-import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.TokenBlacklistRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.repository.UserRepository;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.security.jwt.JwtUtils;
 import com.restaurant.hnks24cntt1it211tranhuunhatproject.service.impl.AuthServiceImpl;
@@ -36,8 +35,9 @@ public class AuthServiceImplTest {
     @Mock
     private UserRepository userRepository;
 
+    // ĐÃ SỬA: Thay thế Repository cũ bằng Service quản lý Redis mới để InjectMocks không bị lỗi
     @Mock
-    private TokenBlacklistRepository tokenBlacklistRepository;
+    private TokenBlacklistService tokenBlacklistService;
 
     @InjectMocks
     private AuthServiceImpl authService;
